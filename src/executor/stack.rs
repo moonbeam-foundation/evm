@@ -10,6 +10,18 @@ use crate::{ExitError, Stack, ExternalOpcode, Opcode, Capture, Handler, Transfer
 use crate::backend::{Log, Basic, Apply, Backend};
 use crate::gasometer::{self, Gasometer};
 
+/// Allows to hook into the step by step execution of the runtime.
+pub trait RuntimeStepHook {
+	fn step_hook(runtime: &mut Runtime);
+}
+
+/// Runtime step hook doing nothing.
+pub struct NoRuntimeStepHook {}
+
+impl RuntimeStepHook for NoRuntimeStepHook {
+	fn step_hook(_runtime: &mut Runtime) { }
+}
+
 /// Account definition for the stack-based executor.
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct StackAccount {
@@ -26,7 +38,7 @@ pub struct StackAccount {
 
 /// Stack-based executor.
 #[derive(Clone)]
-pub struct StackExecutor<'backend, 'config, B> {
+pub struct StackExecutor<'backend, 'config, B, H = NoRuntimeStepHook> {
 	backend: &'backend B,
 	config: &'config Config,
 	gasometer: Gasometer<'config>,
@@ -36,6 +48,7 @@ pub struct StackExecutor<'backend, 'config, B> {
 	precompile: fn(H160, &[u8], Option<usize>) -> Option<Result<(ExitSucceed, Vec<u8>, usize), ExitError>>,
 	is_static: bool,
 	depth: Option<usize>,
+	hook: std::marker::PhantomData<H>,
 }
 
 fn no_precompile(
@@ -46,7 +59,7 @@ fn no_precompile(
 	None
 }
 
-impl<'backend, 'config, B: Backend> StackExecutor<'backend, 'config, B> {
+impl<'backend, 'config, B: Backend, H: RuntimeStepHook> StackExecutor<'backend, 'config, B, H> {
 	/// Create a new stack-based executor.
 	pub fn new(
 		backend: &'backend B,
@@ -73,11 +86,12 @@ impl<'backend, 'config, B: Backend> StackExecutor<'backend, 'config, B> {
 			precompile: precompile,
 			is_static: false,
 			depth: None,
+			hook: Default::default(),
 		}
 	}
 
 	/// Create a substate executor from the current executor.
-	pub fn substate(&self, gas_limit: usize, is_static: bool) -> StackExecutor<'backend, 'config, B> {
+	pub fn substate(&self, gas_limit: usize, is_static: bool) -> Self {
 		Self {
 			backend: self.backend,
 			gasometer: Gasometer::new(gas_limit, self.gasometer.config()),
@@ -91,15 +105,21 @@ impl<'backend, 'config, B: Backend> StackExecutor<'backend, 'config, B> {
 				None => Some(0),
 				Some(n) => Some(n + 1),
 			},
+			hook: Default::default(),
 		}
 	}
 
 	/// Execute the runtime until it returns.
 	pub fn execute(&mut self, runtime: &mut Runtime) -> ExitReason {
-		match runtime.run(self) {
-			Capture::Exit(s) => s,
-			Capture::Trap(_) => unreachable!("Trap is Infallible"),
+		loop {
+			H::step_hook(runtime);
+			match runtime.step(self) {
+				Ok(()) => {},
+				Err(Capture::Exit(s)) => return s,
+				Err(Capture::Trap(_)) => unreachable!("Trap is Infallible"),
+			}
 		}
+		
 	}
 
 	/// Get remaining gas.
@@ -108,9 +128,9 @@ impl<'backend, 'config, B: Backend> StackExecutor<'backend, 'config, B> {
 	}
 
 	/// Merge a substate executor that succeeded.
-	pub fn merge_succeed<'obackend, 'oconfig, OB>(
+	pub fn merge_succeed<'obackend, 'oconfig, OB, OH>(
 		&mut self,
-		mut substate: StackExecutor<'obackend, 'oconfig, OB>
+		mut substate: StackExecutor<'obackend, 'oconfig, OB, OH>
 	) -> Result<(), ExitError> {
 		self.logs.append(&mut substate.logs);
 		self.deleted.append(&mut substate.deleted);
@@ -122,9 +142,9 @@ impl<'backend, 'config, B: Backend> StackExecutor<'backend, 'config, B> {
 	}
 
 	/// Merge a substate executor that reverted.
-	pub fn merge_revert<'obackend, 'oconfig, OB>(
+	pub fn merge_revert<'obackend, 'oconfig, OB, OH>(
 		&mut self,
-		mut substate: StackExecutor<'obackend, 'oconfig, OB>
+		mut substate: StackExecutor<'obackend, 'oconfig, OB, OH>
 	) -> Result<(), ExitError> {
 		self.logs.append(&mut substate.logs);
 
@@ -133,9 +153,9 @@ impl<'backend, 'config, B: Backend> StackExecutor<'backend, 'config, B> {
 	}
 
 	/// Merge a substate executor that failed.
-	pub fn merge_fail<'obackend, 'oconfig, OB>(
+	pub fn merge_fail<'obackend, 'oconfig, OB, OH>(
 		&mut self,
-		mut substate: StackExecutor<'obackend, 'oconfig, OB>
+		mut substate: StackExecutor<'obackend, 'oconfig, OB, OH>
 	) -> Result<(), ExitError> {
 		self.logs.append(&mut substate.logs);
 
@@ -594,7 +614,7 @@ impl<'backend, 'config, B: Backend> StackExecutor<'backend, 'config, B> {
 	}
 }
 
-impl<'backend, 'config, B: Backend> Handler for StackExecutor<'backend, 'config, B> {
+impl<'backend, 'config, B: Backend, H: RuntimeStepHook> Handler for StackExecutor<'backend, 'config, B, H> {
 	type CreateInterrupt = Infallible;
 	type CreateFeedback = Infallible;
 	type CallInterrupt = Infallible;
