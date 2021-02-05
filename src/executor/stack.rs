@@ -11,15 +11,25 @@ use crate::backend::{Log, Basic, Apply, Backend};
 use crate::gasometer::{self, Gasometer};
 
 /// Allows to hook into the step by step execution of the runtime.
-pub trait RuntimeStepHook {
-	fn step_hook(runtime: &mut Runtime);
+pub trait RuntimeStepHook<'backend, 'config, B, H> {
+	fn step_hook(
+		&mut self,
+		executor: &mut StackExecutor<'backend, 'config, B, H>,
+		runtime: &mut Runtime
+	);
 }
 
 /// Runtime step hook doing nothing.
 pub struct NoRuntimeStepHook {}
 
-impl RuntimeStepHook for NoRuntimeStepHook {
-	fn step_hook(_runtime: &mut Runtime) { }
+impl<'backend, 'config, B, H> RuntimeStepHook<'backend, 'config, B, H> for NoRuntimeStepHook {
+	fn step_hook(
+		&mut self,
+		_executor: &mut  StackExecutor<'backend, 'config, B, H>,
+		_runtime: &mut Runtime
+	) {
+
+	}
 }
 
 /// Account definition for the stack-based executor.
@@ -48,7 +58,7 @@ pub struct StackExecutor<'backend, 'config, B, H = NoRuntimeStepHook> {
 	precompile: fn(H160, &[u8], Option<usize>) -> Option<Result<(ExitSucceed, Vec<u8>, usize), ExitError>>,
 	is_static: bool,
 	depth: Option<usize>,
-	hook: std::marker::PhantomData<H>,
+	hook: Option<H>,
 }
 
 fn no_precompile(
@@ -59,7 +69,10 @@ fn no_precompile(
 	None
 }
 
-impl<'backend, 'config, B: Backend, H: RuntimeStepHook> StackExecutor<'backend, 'config, B, H> {
+impl<'backend, 'config, B: Backend, H> StackExecutor<'backend, 'config, B, H> 
+where
+	H: RuntimeStepHook<'backend, 'config, B, H>
+{
 	/// Create a new stack-based executor.
 	pub fn new(
 		backend: &'backend B,
@@ -90,6 +103,12 @@ impl<'backend, 'config, B: Backend, H: RuntimeStepHook> StackExecutor<'backend, 
 		}
 	}
 
+	/// Swap the current step hook with the provided one.
+	pub fn swap_state_hook(&mut self, mut hook: Option<H>) -> Option<H> {
+		std::mem::swap(&mut self.hook, &mut hook);
+		hook
+	}
+
 	/// Create a substate executor from the current executor.
 	pub fn substate(&self, gas_limit: usize, is_static: bool) -> Self {
 		Self {
@@ -112,7 +131,11 @@ impl<'backend, 'config, B: Backend, H: RuntimeStepHook> StackExecutor<'backend, 
 	/// Execute the runtime until it returns.
 	pub fn execute(&mut self, runtime: &mut Runtime) -> ExitReason {
 		loop {
-			H::step_hook(runtime);
+			if let Some(mut hook) = self.hook.take() {
+				hook.step_hook(self, runtime);
+				self.hook = Some(hook);
+			}
+
 			match runtime.step(self) {
 				Ok(()) => {},
 				Err(Capture::Exit(s)) => return s,
@@ -614,7 +637,10 @@ impl<'backend, 'config, B: Backend, H: RuntimeStepHook> StackExecutor<'backend, 
 	}
 }
 
-impl<'backend, 'config, B: Backend, H: RuntimeStepHook> Handler for StackExecutor<'backend, 'config, B, H> {
+impl<'backend, 'config, B: Backend, H> Handler for StackExecutor<'backend, 'config, B, H> 
+where
+	H: RuntimeStepHook<'backend, 'config, B, H>
+{
 	type CreateInterrupt = Infallible;
 	type CreateFeedback = Infallible;
 	type CallInterrupt = Infallible;
