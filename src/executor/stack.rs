@@ -14,8 +14,8 @@ use crate::gasometer::{self, Gasometer};
 pub trait RuntimeStepHook<'backend, 'config, B, H> {
 	fn step_hook(
 		&mut self,
-		executor: &mut StackExecutor<'backend, 'config, B, H>,
-		runtime: &mut Runtime
+		executor: &StackExecutor<'backend, 'config, B, H>,
+		runtime: &Runtime
 	);
 }
 
@@ -25,8 +25,8 @@ pub struct NoRuntimeStepHook {}
 impl<'backend, 'config, B, H> RuntimeStepHook<'backend, 'config, B, H> for NoRuntimeStepHook {
 	fn step_hook(
 		&mut self,
-		_executor: &mut  StackExecutor<'backend, 'config, B, H>,
-		_runtime: &mut Runtime
+		_executor: &StackExecutor<'backend, 'config, B, H>,
+		_runtime: &Runtime
 	) {
 
 	}
