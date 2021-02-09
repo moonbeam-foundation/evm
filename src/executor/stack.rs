@@ -130,19 +130,28 @@ where
 
 	/// Execute the runtime until it returns.
 	pub fn execute(&mut self, runtime: &mut Runtime) -> ExitReason {
-		loop {
-			if let Some(mut hook) = self.hook.take() {
+		if let Some(mut hook) = self.hook.take() {
+			// If a hook is in place, run the runtime step by step and
+			// with calls to the hook.
+			let ret = loop {
 				hook.step_hook(self, runtime);
-				self.hook = Some(hook);
-			}
+				match runtime.step(self) {
+					Ok(()) => {},
+					Err(Capture::Exit(s)) => break s,
+					Err(Capture::Trap(_)) => unreachable!("Trap is Infallible"),
+				}
+			};
 
-			match runtime.step(self) {
-				Ok(()) => {},
-				Err(Capture::Exit(s)) => return s,
-				Err(Capture::Trap(_)) => unreachable!("Trap is Infallible"),
+			self.hook = Some(hook);
+
+			ret
+		} else {
+			// Otherwise just run without stepping.
+			match runtime.run(self) {
+				Capture::Exit(s) => s,
+				Capture::Trap(_) => unreachable!("Trap is Infallible"),
 			}
-		}
-		
+		}		
 	}
 
 	/// Get remaining gas.
