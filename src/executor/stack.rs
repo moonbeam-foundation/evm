@@ -11,8 +11,8 @@ use crate::backend::{Log, Basic, Apply, Backend};
 use crate::gasometer::{self, Gasometer};
 
 /// Allows to hook into the step by step execution of the runtime.
-pub trait RuntimeStepHook<'backend, 'config, B, H> {
-	fn step_hook(
+pub trait Hook<'backend, 'config, B, H> {
+	fn step(
 		&mut self,
 		executor: &StackExecutor<'backend, 'config, B, H>,
 		runtime: &Runtime
@@ -20,10 +20,10 @@ pub trait RuntimeStepHook<'backend, 'config, B, H> {
 }
 
 /// Runtime step hook doing nothing.
-pub struct NoRuntimeStepHook {}
+pub struct NoHook {}
 
-impl<'backend, 'config, B, H> RuntimeStepHook<'backend, 'config, B, H> for NoRuntimeStepHook {
-	fn step_hook(
+impl<'backend, 'config, B, H> Hook<'backend, 'config, B, H> for NoHook {
+	fn step(
 		&mut self,
 		_executor: &StackExecutor<'backend, 'config, B, H>,
 		_runtime: &Runtime
@@ -48,7 +48,7 @@ pub struct StackAccount {
 
 /// Stack-based executor.
 #[derive(Clone)]
-pub struct StackExecutor<'backend, 'config, B, H = NoRuntimeStepHook> {
+pub struct StackExecutor<'backend, 'config, B, H = NoHook> {
 	backend: &'backend B,
 	config: &'config Config,
 	gasometer: Gasometer<'config>,
@@ -71,7 +71,7 @@ fn no_precompile(
 
 impl<'backend, 'config, B: Backend, H> StackExecutor<'backend, 'config, B, H> 
 where
-	H: RuntimeStepHook<'backend, 'config, B, H>
+	H: Hook<'backend, 'config, B, H>
 {
 	/// Create a new stack-based executor.
 	pub fn new(
@@ -103,8 +103,12 @@ where
 		}
 	}
 
-	/// Swap the current step hook with the provided one.
-	pub fn swap_state_hook(&mut self, mut hook: Option<H>) -> Option<H> {
+	/// Swap the current hook with the provided one.
+	/// The executor needs to take ownership of the provided hook.
+	/// Call again with another hook (or `None`) if you want the
+	/// previous hook back to inspect it.
+	#[must_use]
+	pub fn swap_hook(&mut self, mut hook: Option<H>) -> Option<H> {
 		std::mem::swap(&mut self.hook, &mut hook);
 		hook
 	}
@@ -134,7 +138,7 @@ where
 			// If a hook is in place, run the runtime step by step and
 			// with calls to the hook.
 			let ret = loop {
-				hook.step_hook(self, runtime);
+				hook.step(self, runtime);
 				match runtime.step(self) {
 					Ok(()) => {},
 					Err(Capture::Exit(s)) => break s,
@@ -465,6 +469,7 @@ where
 
 			substate.account_mut(address).reset_storage = true;
 			substate.account_mut(address).storage = BTreeMap::new();
+			let _ = substate.swap_hook(self.swap_hook(None));
 		}
 
 		let context = Context {
@@ -497,6 +502,7 @@ where
 		);
 
 		let reason = substate.execute(&mut runtime);
+		let _ = self.swap_hook(substate.swap_hook(None));
 
 		match reason {
 			ExitReason::Succeed(s) => {
@@ -584,6 +590,7 @@ where
 
 		let mut substate = self.substate(gas_limit, is_static);
 		substate.account_mut(context.address);
+		let _ = substate.swap_hook(self.swap_hook(None));
 
 		if let Some(depth) = self.depth {
 			if depth + 1 > self.config.call_stack_limit {
@@ -624,6 +631,7 @@ where
 		);
 
 		let reason = substate.execute(&mut runtime);
+		let _ = self.swap_hook(substate.swap_hook(None));
 
 		match reason {
 			ExitReason::Succeed(s) => {
@@ -648,7 +656,7 @@ where
 
 impl<'backend, 'config, B: Backend, H> Handler for StackExecutor<'backend, 'config, B, H> 
 where
-	H: RuntimeStepHook<'backend, 'config, B, H>
+	H: Hook<'backend, 'config, B, H>
 {
 	type CreateInterrupt = Infallible;
 	type CreateFeedback = Infallible;
