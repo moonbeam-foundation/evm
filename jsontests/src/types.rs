@@ -94,7 +94,12 @@ impl TestMulti {
 					transaction: TestTransaction {
 						data: self.transaction.data[post_state.indexes.data].0.clone(),
 						gas_limit: self.transaction.gas_limit[post_state.indexes.gas],
-						gas_price: self.transaction.gas_price.unwrap_or(U256::zero()),
+						gas_price: self
+							.transaction
+							.gas_price
+							.or(self.transaction.max_fee_per_gas)
+							.unwrap_or_default(),
+						gas_priority_fee: self.transaction.max_priority_fee_per_gas,
 						nonce: self.transaction.nonce,
 						secret_key: self.transaction.secret_key,
 						sender: self.transaction.sender,
@@ -191,6 +196,7 @@ pub struct TestPostState {
 pub enum TestExpectException {
 	TR_TypeNotSupported,
 	TR_IntrinsicGas,
+	TR_TipGtFeeCap,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -236,6 +242,7 @@ pub struct TestTransaction {
 	pub data: Vec<u8>,
 	pub gas_limit: U256,
 	pub gas_price: U256,
+	pub gas_priority_fee: Option<U256>,
 	pub nonce: U256,
 	pub secret_key: H256,
 	pub sender: H160,
