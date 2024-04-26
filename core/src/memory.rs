@@ -198,7 +198,7 @@ fn next_multiple_of_32(x: U256) -> Option<U256> {
 
 #[cfg(test)]
 mod tests {
-	use super::{next_multiple_of_32, U256};
+	use super::{next_multiple_of_32, U256, Memory};
 
 	#[test]
 	fn test_next_multiple_of_32() {
@@ -230,5 +230,25 @@ mod tests {
 				assert_eq!(Some(last_multiple_of_32), next_multiple_of_32(x));
 			}
 		}
+	}
+
+	#[test]
+	fn test_memory_copy_works(){
+		// Create a new instance of memory
+		let mut memory = Memory::new(100usize);
+
+		// Set the [0,0,0,1,2,3,4] array as memory data.
+		//
+		// We insert the [1,2,3,4] array on index 3, 
+		// that's why we have the zero padding at the beginning.
+		memory.set(3usize, &[1u8,2u8,3u8,4u8], None).unwrap();
+		assert_eq!(memory.data(), &[0u8,0u8,0u8,1u8,2u8,3u8,4u8].to_vec());
+
+		// Copy 1 byte into index 0.
+		// As the length is 1, we only copy the byte present on index 3.
+		memory.copy(0usize, 3usize, 1usize).unwrap();
+
+		// Now the new memory data results in [1,0,0,1,2,3,4]
+		assert_eq!(memory.data(), &[1u8,0u8,0u8,1u8,2u8,3u8,4u8].to_vec());
 	}
 }
