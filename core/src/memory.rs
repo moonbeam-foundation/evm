@@ -181,6 +181,12 @@ impl Memory {
 
 		self.set(memory_offset, data, Some(ulen))
 	}
+
+	/// Copies part of the memory inside another part of itself.
+	pub fn copy(&mut self, dst: usize, src: usize, len: usize ) -> Result<(), ExitFatal>{
+		self.data.copy_within(src..src + len, dst);
+		Ok(())
+	}
 }
 
 /// Rounds up `x` to the closest multiple of 32. If `x % 32 == 0` then `x` is returned.

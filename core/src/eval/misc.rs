@@ -1,6 +1,6 @@
 use super::Control;
 use crate::{ExitError, ExitFatal, ExitRevert, ExitSucceed, Machine};
-use core::cmp::min;
+use core::cmp::{min, max};
 use primitive_types::{H256, U256};
 
 #[inline]
@@ -112,6 +112,22 @@ pub fn mstore8(state: &mut Machine) -> Control {
 	let index = as_usize_or_fail!(index);
 	let value = (value.low_u32() & 0xff) as u8;
 	match state.memory.set(index, &[value], Some(1)) {
+		Ok(()) => Control::Continue(1),
+		Err(e) => Control::Exit(e.into()),
+	}
+}
+
+#[inline]
+pub fn mcopy(state: &mut Machine) -> Control {
+	pop_u256!(state, dst, src, len);
+	trace_op!("MCopy: {}, {}, {}", dst, src, len);
+
+	try_or_fail!(state.memory.resize_offset(max(dst,src), len));
+
+	let dst = as_usize_or_fail!(dst);
+	let src = as_usize_or_fail!(src);
+	let len = as_usize_or_fail!(len);
+	match state.memory.copy(dst, src, len) {
 		Ok(()) => Control::Continue(1),
 		Err(e) => Control::Exit(e.into()),
 	}
