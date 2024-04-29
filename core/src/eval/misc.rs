@@ -117,6 +117,7 @@ pub fn mstore8(state: &mut Machine) -> Control {
 	}
 }
 
+/// Support for EIP-5656: MCOPY instruction.
 #[inline]
 pub fn mcopy(state: &mut Machine) -> Control {
 	pop_u256!(state, dst, src, len);
