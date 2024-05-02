@@ -23,6 +23,7 @@ pub struct MemoryStackSubstate<'config> {
 	logs: Vec<Log>,
 	accounts: BTreeMap<H160, MemoryStackAccount>,
 	storages: BTreeMap<(H160, H256), H256>,
+	transient_storage: BTreeMap<(H160, H256), H256>,
 	deletes: BTreeSet<H160>,
 }
 
@@ -34,6 +35,7 @@ impl<'config> MemoryStackSubstate<'config> {
 			logs: Vec::new(),
 			accounts: BTreeMap::new(),
 			storages: BTreeMap::new(),
+			transient_storage: BTreeMap::new(),
 			deletes: BTreeSet::new(),
 		}
 	}
@@ -119,6 +121,7 @@ impl<'config> MemoryStackSubstate<'config> {
 			logs: Vec::new(),
 			accounts: BTreeMap::new(),
 			storages: BTreeMap::new(),
+			transient_storage: BTreeMap::new(),
 			deletes: BTreeSet::new(),
 		};
 		mem::swap(&mut entering, self);
@@ -151,6 +154,7 @@ impl<'config> MemoryStackSubstate<'config> {
 
 		self.accounts.append(&mut exited.accounts);
 		self.storages.append(&mut exited.storages);
+		self.transient_storage.append(&mut exited.transient_storage);
 		self.deletes.append(&mut exited.deletes);
 
 		Ok(())
@@ -246,6 +250,16 @@ impl<'config> MemoryStackSubstate<'config> {
 		None
 	}
 
+	pub fn known_transient_storage(&self, address: H160, key: H256) -> Option<H256> {
+		if let Some(value) = self.transient_storage.get(&(address, key)) {
+			Some(*value)
+		} else if let Some(parent) = self.parent.as_ref() {
+			parent.known_transient_storage(address, key)
+		} else {
+			None
+		}
+	}
+
 	pub fn is_cold(&self, address: H160) -> bool {
 		self.recursive_is_cold(&|a| a.accessed_addresses.contains(&address))
 	}
@@ -312,6 +326,10 @@ impl<'config> MemoryStackSubstate<'config> {
 
 	pub fn set_storage(&mut self, address: H160, key: H256, value: H256) {
 		self.storages.insert((address, key), value);
+	}
+
+	pub fn set_transient_storage(&mut self, address: H160, key: H256, value: H256) {
+		self.transient_storage.insert((address, key), value);
 	}
 
 	pub fn reset_storage<B: Backend>(&mut self, address: H160, backend: &B) {
@@ -463,6 +481,12 @@ impl<'backend, 'config, B: Backend> Backend for MemoryStackState<'backend, 'conf
 			.unwrap_or_else(|| self.backend.storage(address, key))
 	}
 
+	fn transient_storage(&self, address: H160, index: H256) -> H256 {
+		self.substate
+			.known_transient_storage(address, index)
+			.unwrap_or_else(|| self.backend.transient_storage(address, index))
+	}
+
 	fn original_storage(&self, address: H160, key: H256) -> Option<H256> {
 		if let Some(value) = self.substate.known_original_storage(address) {
 			return Some(value);
@@ -525,6 +549,10 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 
 	fn set_storage(&mut self, address: H160, key: H256, value: H256) {
 		self.substate.set_storage(address, key, value)
+	}
+
+	fn set_transient_storage(&mut self, address: H160, key: H256, value: H256) {
+		self.substate.set_transient_storage(address, key, value)
 	}
 
 	fn reset_storage(&mut self, address: H160) {
