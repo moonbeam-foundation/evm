@@ -1,4 +1,4 @@
-mod consts;
+pub mod consts;
 mod costs;
 mod utils;
 
@@ -272,7 +272,7 @@ where
 
 /// Calculate the opcode cost.
 #[allow(clippy::nonminimal_bool)]
-fn dynamic_opcode_cost<H: RuntimeBackend>(
+pub fn dynamic_opcode_cost<H: RuntimeBackend>(
 	address: H160,
 	opcode: Opcode,
 	stack: &Stack,
@@ -562,7 +562,7 @@ fn dynamic_opcode_cost<H: RuntimeBackend>(
 
 /// Gas cost.
 #[derive(Debug, Clone, Copy)]
-enum GasCost {
+pub enum GasCost {
 	/// Zero gas cost.
 	Zero,
 	/// Base gas cost.
@@ -817,7 +817,7 @@ impl GasCost {
 
 /// Memory cost.
 #[derive(Debug, Clone, Copy)]
-struct MemoryCost {
+pub struct MemoryCost {
 	/// Affected memory offset.
 	pub offset: U256,
 	/// Affected length.

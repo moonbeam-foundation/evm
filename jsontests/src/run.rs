@@ -4,7 +4,7 @@ use crate::types::{Fork, TestCompletionStatus, TestData, TestExpectException, Te
 use evm::backend::OverlayedBackend;
 use evm::standard::{Config, Etable, EtableResolver, Invoker, TransactArgs};
 use evm::utils::u256_to_h256;
-use evm::Capture;
+use evm::{Capture, Opcode, RuntimeState};
 use evm::{interpreter::Interpreter, GasState};
 use evm_precompile::StandardPrecompileSet;
 use primitive_types::U256;
@@ -98,6 +98,7 @@ pub fn run_test(
 ) -> Result<(), Error> {
 	let config = match test.fork {
 		Fork::Berlin => Config::berlin(),
+		Fork::Cancun => Config::cancun(),
 		_ => return Err(Error::UnsupportedFork),
 	};
 
@@ -138,6 +139,7 @@ pub fn run_test(
 					code: account.code.0,
 					nonce: account.nonce,
 					storage,
+					transient_storage: Default::default(),
 				},
 			)
 		})
@@ -179,12 +181,13 @@ pub fn run_test(
 
 	let mut run_backend = OverlayedBackend::new(&base_backend, initial_accessed.clone());
 	let mut step_backend = OverlayedBackend::new(&base_backend, initial_accessed.clone());
+	let mut step_backend2 = OverlayedBackend::new(&base_backend, initial_accessed.clone());
 
 	// Run
 	let run_result = evm::transact(args.clone(), Some(4), &mut run_backend, &invoker);
 	let run_changeset = run_backend.deconstruct().1;
-	let mut run_backend = base_backend.clone();
-	run_backend.apply_overlayed(&run_changeset);
+	let mut run_inmemory_backend = base_backend.clone();
+	run_inmemory_backend.apply_overlayed(&run_changeset);
 
 	// Step
 	if debug {
@@ -192,12 +195,43 @@ pub fn run_test(
 			|mut stepper| loop {
 				{
 					if let Some(machine) = stepper.last_interpreter() {
-						println!(
-							"pc: {}, opcode: {:?}, gas: 0x{:x}",
-							machine.position(),
-							machine.peek_opcode(),
-							machine.machine().state.gas(),
-						);
+						if let Some(opcode) = machine.peek_opcode() {
+							let address = AsRef::<RuntimeState>::as_ref(&machine.state)
+							.context
+							.address;
+
+							let cost = if let Some(cost) = evm::standard::gasometer::consts::STATIC_COST_TABLE[opcode.as_usize()] {
+								cost
+							} else {
+								let (gas, memory_gas) = evm::standard::gasometer::dynamic_opcode_cost(
+									address,
+									opcode,
+									&machine.stack,
+									machine.state.gasometer.is_static,
+									machine.state.gasometer.config,
+									&mut step_backend2,
+								)?;
+								let mut cost = gas.cost(machine.state.gasometer.gas64(), machine.state.gasometer.config)?;
+
+								if let Some(memory_gas) = memory_gas {
+									let memory_cost = memory_gas.cost()?;
+									if let Some(memory_cost) = memory_cost {
+										cost = cost.saturating_add(memory_cost);
+									}
+								}
+
+								cost
+							};
+
+							println!(
+								"pc: {:3}, opcode: {:2x}, cost: {:6}, gas: {:6}, total_used_gas: {}",
+								machine.position(),
+								machine.peek_opcode().unwrap_or(Opcode::STOP).as_u8(),
+								cost,
+								machine.state.gas(),
+								machine.state.gasometer.effective_gas()
+							);
+						}
 					}
 				}
 				if let Err(Capture::Exit(result)) = stepper.step() {
@@ -210,8 +244,9 @@ pub fn run_test(
 		step_backend.apply_overlayed(&step_changeset);
 	}
 
-	let state_root = crate::hash::state_root(&run_backend);
+	let state_root = crate::hash::state_root(&run_inmemory_backend);
 
+	dbg!(&run_result);
 	if test.post.expect_exception.is_some() {
 		if run_result.is_err() {
 			return Ok(());
@@ -220,15 +255,15 @@ pub fn run_test(
 		}
 	}
 
+	dbg!(state_root);
 	if state_root != test.post.hash {
 		if debug {
-			for (address, account) in &run_backend.state {
+			for (address, account) in &run_inmemory_backend.state {
 				println!(
-					"address: {:?}, balance: {}, nonce: {}, code: 0x{}, storage: {:?}",
+					"address: {:?}, balance: {}, nonce: {}, storage: {:?}",
 					address,
 					account.balance,
 					account.nonce,
-					hex::encode(&account.code),
 					account.storage
 				);
 			}

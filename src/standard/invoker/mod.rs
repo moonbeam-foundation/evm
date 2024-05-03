@@ -44,6 +44,7 @@ pub enum SubstackInvoke {
 	Create { trap: CreateTrapData, address: H160 },
 }
 
+#[derive(Debug)]
 /// Return value of a transaction.
 pub enum TransactValue {
 	Call {

@@ -5,7 +5,7 @@
 //! wrapping them or replacing the generic parameters.
 
 mod config;
-mod gasometer;
+pub mod gasometer;
 mod invoker;
 
 pub use self::config::Config;

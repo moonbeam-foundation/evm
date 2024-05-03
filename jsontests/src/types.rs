@@ -94,11 +94,7 @@ impl TestMulti {
 					transaction: TestTransaction {
 						data: self.transaction.data[post_state.indexes.data].0.clone(),
 						gas_limit: self.transaction.gas_limit[post_state.indexes.gas],
-						gas_price: self
-							.transaction
-							.gas_price
-							.or(self.transaction.max_fee_per_gas)
-							.unwrap_or_default(),
+						gas_price: self.transaction.gas_price.unwrap_or(self.env.current_base_fee),
 						gas_priority_fee: self.transaction.max_priority_fee_per_gas,
 						nonce: self.transaction.nonce,
 						secret_key: self.transaction.secret_key,
@@ -197,6 +193,9 @@ pub enum TestExpectException {
 	TR_TypeNotSupported,
 	TR_IntrinsicGas,
 	TR_TipGtFeeCap,
+	TR_NoFunds,
+	TR_FeeCapLessThanBlocks,
+	TR_GasLimitReached
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]

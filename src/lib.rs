@@ -69,7 +69,7 @@ pub mod backend;
 pub mod standard;
 
 mod call_stack;
-mod gasometer;
+pub mod gasometer;
 mod invoker;
 
 pub use evm_interpreter::*;
