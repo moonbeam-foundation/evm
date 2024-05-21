@@ -25,6 +25,7 @@ pub struct MemoryStackSubstate<'config> {
 	storages: BTreeMap<(H160, H256), H256>,
 	transient_storage: BTreeMap<(H160, H256), H256>,
 	deletes: BTreeSet<H160>,
+	creates: BTreeSet<H160>,
 }
 
 impl<'config> MemoryStackSubstate<'config> {
@@ -37,6 +38,7 @@ impl<'config> MemoryStackSubstate<'config> {
 			storages: BTreeMap::new(),
 			transient_storage: BTreeMap::new(),
 			deletes: BTreeSet::new(),
+			creates: BTreeSet::new(),
 		}
 	}
 
@@ -123,6 +125,7 @@ impl<'config> MemoryStackSubstate<'config> {
 			storages: BTreeMap::new(),
 			transient_storage: BTreeMap::new(),
 			deletes: BTreeSet::new(),
+			creates: BTreeSet::new(),
 		};
 		mem::swap(&mut entering, self);
 
@@ -292,6 +295,18 @@ impl<'config> MemoryStackSubstate<'config> {
 		false
 	}
 
+	pub fn created(&self, address: H160) -> bool {
+		if self.creates.contains(&address) {
+			return true;
+		}
+
+		if let Some(parent) = self.parent.as_ref() {
+			return parent.created(address);
+		}
+
+		false
+	}
+
 	#[allow(clippy::map_entry)]
 	fn account_mut<B: Backend>(&mut self, address: H160, backend: &B) -> &mut MemoryStackAccount {
 		if !self.accounts.contains_key(&address) {
@@ -358,6 +373,10 @@ impl<'config> MemoryStackSubstate<'config> {
 
 	pub fn set_deleted(&mut self, address: H160) {
 		self.deletes.insert(address);
+	}
+
+	pub fn set_created(&mut self, address: H160) {
+		self.creates.insert(address);
 	}
 
 	pub fn set_code<B: Backend>(&mut self, address: H160, code: Vec<u8>, backend: &B) {
@@ -535,6 +554,10 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 		self.substate.deleted(address)
 	}
 
+	fn created(&self, address: H160) -> bool {
+		self.substate.created(address)
+	}
+
 	fn is_cold(&self, address: H160) -> bool {
 		self.substate.is_cold(address)
 	}
@@ -565,6 +588,10 @@ impl<'backend, 'config, B: Backend> StackState<'config> for MemoryStackState<'ba
 
 	fn set_deleted(&mut self, address: H160) {
 		self.substate.set_deleted(address)
+	}
+
+	fn set_created(&mut self, address: H160) {
+		self.substate.set_created(address)
 	}
 
 	fn set_code(&mut self, address: H160, code: Vec<u8>) {
