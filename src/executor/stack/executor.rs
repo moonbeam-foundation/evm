@@ -741,6 +741,8 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			return Capture::Exit((e.into(), None, Vec::new()));
 		}
 
+		self.state.set_created(address);
+
 		let after_gas = if take_l64 && self.config.call_l64_after_gas {
 			if self.config.estimate {
 				let initial_after_gas = self.state.metadata().gasometer.gas();
