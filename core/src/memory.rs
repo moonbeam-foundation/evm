@@ -1,7 +1,7 @@
 use crate::{ExitError, ExitFatal};
 use alloc::vec::Vec;
-use core::cmp::{max, min};
 use core::ops::{BitAnd, Not};
+use core::cmp::{max, min};
 use primitive_types::U256;
 
 /// A sequencial memory. It uses Rust's `Vec` for internal
