@@ -1570,8 +1570,8 @@ impl<'inner, 'config, 'precompiles, S: StackState<'config>, P: PrecompileSet> Pr
 	fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) -> Result<(), ExitError> {
 		event!(Log {
 			address,
-			topics,
-			data
+			topics: &topics,
+			data: &data
 		});
 		Handler::log(self.executor, address, topics, data)
 	}
