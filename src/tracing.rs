@@ -1,6 +1,7 @@
 //! Allows to listen to runtime events.
 
 use crate::Context;
+use alloc::vec::Vec;
 use evm_runtime::{CreateScheme, ExitReason, Transfer};
 use primitive_types::{H160, H256, U256};
 
@@ -66,6 +67,11 @@ pub enum Event<'a> {
 		target_gas: Option<u64>,
 		is_static: bool,
 		context: &'a Context,
+	},
+	Log {
+		address: H160,
+		topics: Vec<H256>,
+		data: Vec<u8>,
 	},
 }
 
