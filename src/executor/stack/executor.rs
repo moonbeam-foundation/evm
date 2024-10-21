@@ -1264,6 +1264,11 @@ impl<'config, S: StackState<'config>, P: PrecompileSet> Handler
 	}
 
 	fn log(&mut self, address: H160, topics: Vec<H256>, data: Vec<u8>) -> Result<(), ExitError> {
+		event!(Log {
+			address,
+			topics: &topics,
+			data: &data
+		});
 		self.state.log(address, topics, data);
 		Ok(())
 	}
