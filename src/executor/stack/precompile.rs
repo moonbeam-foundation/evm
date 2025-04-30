@@ -76,6 +76,9 @@ pub trait PrecompileHandle {
 	/// Retreive the context in which the precompile is executed.
 	fn context(&self) -> &Context;
 
+	/// Retreive the address of the EOA that originated the transaction.
+	fn origin(&self) -> H160;
+
 	/// Is the precompile call is done statically.
 	fn is_static(&self) -> bool;
 
