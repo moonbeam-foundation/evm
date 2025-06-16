@@ -774,9 +774,9 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			CreateScheme::Legacy { caller } => {
 				let nonce = self.nonce(caller);
 				let mut stream = rlp::RlpStream::new_list(2);
-				stream.append(&caller);
-				stream.append(&nonce);
-				H256::from_slice(Keccak256::digest(&stream.out()).as_slice()).into()
+				stream.append(&caller.as_bytes());
+				stream.append(&nonce.to_big_endian().as_slice());
+				H256::from_slice(Keccak256::digest(stream.out()).as_slice()).into()
 			}
 			CreateScheme::Fixed(naddress) => naddress,
 		}

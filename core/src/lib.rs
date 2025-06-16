@@ -105,11 +105,7 @@ impl Machine {
 	/// Copy and get the return value of the machine, if any.
 	pub fn return_value(&self) -> Vec<u8> {
 		if self.return_range.start > U256::from(usize::MAX) {
-			let mut ret = Vec::new();
-			ret.resize(
-				(self.return_range.end - self.return_range.start).as_usize(),
-				0,
-			);
+			let ret = vec![0; (self.return_range.end - self.return_range.start).as_usize()];
 			ret
 		} else if self.return_range.end > U256::from(usize::MAX) {
 			let mut ret = self.memory.get(

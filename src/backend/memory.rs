@@ -196,7 +196,7 @@ impl<'vicinity> ApplyBackend for MemoryBackend<'vicinity> {
 					delegation,
 				} => {
 					let is_empty = {
-						let account = self.state.entry(address).or_insert_with(Default::default);
+						let account = self.state.entry(address).or_default();
 						account.balance = basic.balance;
 						account.nonce = basic.nonce;
 						if let Some(code) = code {
