@@ -1,3 +1,5 @@
+extern crate alloc;
+
 use crate::backend::Backend;
 use crate::executor::stack::precompile::{
 	IsPrecompileResult, PrecompileFailure, PrecompileHandle, PrecompileOutput, PrecompileSet,
@@ -9,7 +11,7 @@ use crate::{
 	Capture, Config, Context, CreateScheme, ExitError, ExitReason, Handler, Opcode, Runtime, Stack,
 	Transfer,
 };
-use alloc::{collections::BTreeSet, rc::Rc, vec::Vec};
+use alloc::{collections::BTreeSet, rc::Rc, vec, vec::Vec};
 use core::{cmp::min, convert::Infallible};
 use evm_core::ExitFatal;
 use evm_runtime::Resolve;
