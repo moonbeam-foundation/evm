@@ -600,7 +600,7 @@ impl<'config, 'precompiles, S: StackState<'config>, P: PrecompileSet>
 			Capture::Trap(rt) => {
 				let mut cs = Vec::with_capacity(DEFAULT_CALL_STACK_CAPACITY);
 				cs.push(rt.0);
-				let (s, _, v) = self.execute_with_call_stack(&mut cs);
+				let (s, _, v) = self.execute_with_call_stack(&mut cs, None);
 				emit_exit!(s, v)
 			}
 		}
